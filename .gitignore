@@ -1,0 +1,4 @@
+.DS_Store
+project_venv
+Small_Language_Model.egg-info
+*.pyc
