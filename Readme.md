@@ -1,4 +1,4 @@
-# Small Language Model
+# very Small Language Model (vSLM)
 
 ## About
 A short project to implement a small GPT like model from scratch.
@@ -17,4 +17,10 @@ pip install -e .
 pip install -r requirements.txt
 ```
 3. Run the code
-TODO
+```bash
+python main.py --training_iterations=5000 --text=shakespeare --train_model=False 
+```
+
+4. In coming
+   * Fine-tuning
+   * Encoding-Decoding architecture 
