@@ -1,8 +1,7 @@
 # very Small Language Model (vSLM)
 
 ## About
-A short project to implement a small GPT like model from scratch.
-Most of it is inspired by minBPE and nanoGPT.
+A short project to implement a (very) small language model from scratch, from the tokenizer to the fine-tuning.
 
 ## How to run the project:
 1. Create and activate a virtual environment (optional)
