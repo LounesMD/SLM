@@ -21,13 +21,18 @@ class AttentionHead(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, mask=False):
+    def forward(self, x, mask=False, enc_out=None):
         """
         Compute scaled dot-product attention.
+        enc_out is used in the case of an Encoder-Decoder architecture. Key-Value of the MHA of the Encoder.
         """
         Q = self.W_Q(x)
-        K = self.W_K(x)
-        V = self.W_V(x)
+        if enc_out is not None:
+            K = self.W_K(enc_out)
+            V = self.W_V(enc_out)
+        else:
+            K = self.W_K(x)
+            V = self.W_V(x)
 
         scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(Q.size(-1))
         res = F.softmax(scores, dim=-1)
@@ -65,9 +70,10 @@ class MulltiHeadAttention(nn.Module):
         self.fc_out = nn.Linear(n_heads * head_size, n_embed)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, enc_out=None):
+        # enc_out is used in the case of an Encoder-Decoder architecture. Key-Value of the MHA of the Decoder.
         x = torch.cat(
-            [head(x) for head in self.heads], dim=-1
+            [head(x, enc_out) for head in self.heads], dim=-1
         )  # Compute h times the attention
         x = self.fc_out(x)
         x = self.dropout(x)
@@ -96,7 +102,7 @@ class MaskedMulltiHeadAttention(MulltiHeadAttention):
 
 class FFNetwork(nn.Module):
     """
-    Fast forward network
+    Feed forward network
     """
 
     def __init__(self, n_embed: int, dropout: float) -> None:
@@ -131,6 +137,24 @@ def batch(data, block_size, batch_size, device):
     ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack([data[i : i + block_size] for i in ix])
     y = torch.stack([data[i + 1 : i + block_size + 1] for i in ix])
+    x, y = x.to(device), y.to(device)
+    return x, y
+
+
+def pad_sequence(seq, max_length, padding_value=99):
+    if len(seq) < max_length:
+        pad_size = max_length - len(seq)
+        return torch.cat([seq, torch.full((pad_size,), padding_value).to(device="mps")])
+    else:
+        return seq[:max_length]  # Truncate if longer than max_length
+
+
+def batch_translation(data_x, data_y, block_size, batch_size, device):
+    assert len(data_x) == len(data_y)
+    max_length = 16
+    ix = torch.randint(len(data_x) - block_size, (batch_size,))
+    x = torch.stack([pad_sequence(data_x[i], max_length) for i in ix]).to(device)
+    y = torch.stack([pad_sequence(data_y[i], max_length) for i in ix]).to(device)
     x, y = x.to(device), y.to(device)
     return x, y
 
