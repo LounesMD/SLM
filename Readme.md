@@ -1,7 +1,8 @@
 # very Small Language Model (vSLM)
 
 ## About
-A short project to implement a (very) small language model from scratch, from the tokenizer to the fine-tuning.
+A short project to implement a small GPT like model from scratch.
+Most of it is inspired by minBPE and nanoGPT.
 
 ## How to run the project:
 1. Create and activate a virtual environment (optional)
@@ -17,7 +18,7 @@ pip install -r requirements.txt
 ```
 3. Run the code
 ```bash
-python main.py --training_iterations=5000 --text=shakespeare --train_model=False 
+python main.py --training_iterations=5000 --text=shakespeare --train_model=False --task=generation
 ```
 
 4. In coming
