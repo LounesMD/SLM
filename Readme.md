@@ -21,6 +21,11 @@ pip install -r requirements.txt
 python main.py --training_iterations=5000 --text=shakespeare --train_model=False --task=generation
 ```
 
-4. In coming
-   * Fine-tuning
-   * Encoding-Decoding architecture 
+4. In coming:
+   * Fine-tuning (LoRA + RLHF)
+
+5. Done:
+   * Tokenizer (byte and character level)
+   * Full Transformer architecture (Encoder + Decoder)
+   * Training and inference pipeline for generation (Lorem Ipsum and Shakespeare)
+   * Training and inference pipeline for translation (en → fr)
