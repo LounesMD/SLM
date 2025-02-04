@@ -1,5 +1,6 @@
 import argparse
 
+import numpy as np
 import torch
 from lorem_text import lorem
 
@@ -32,7 +33,7 @@ def main():
     parser.add_argument(
         "--task",
         default="generation",
-        type=str,        
+        type=str,
         choices=["generation", "translation"],
         help="Task to perform: generation or translation (fr-en)",
     )
@@ -53,8 +54,8 @@ def main():
     elif args.task == "translation":
         text_en = open("data/en2fr.txt").read()
         text_fr = open("data/fr2en.txt").read()
-        # We manually set text to the distinct characters of the two languages. Will be used only to build the tokenizer.
-        text = ''.join(set(text_en) | set(text_fr))
+        # We manually set text to the distinct characters of the two languages. Will be used only to build the tokenizer.
+        text = "".join(set(text_en) | set(text_fr))
     # Initialize the tokenizer
     if False:
         # Load a trained tokenizer
@@ -85,7 +86,8 @@ def main():
         training_iterations=training_iterations,
     ).to(device)
 
-    print(model)
+    # print(model)
+
     if args.train_model:
         if args.task == "generation":
             # We split our text into 90% train and 10% validation
@@ -101,19 +103,19 @@ def main():
             model.save("weights/model_generation.pth")
         elif args.task == "translation":
             # We split our text into 90% train and 10% validation
-            size = int(0.9*len(text_en.split("\n")))
+            size = int(0.9 * len(text_en.split("\n")))
             train_data = (
-                    [tok.encode(elt) for elt in text_en.split("\n")[: size] ],
-                    [tok.encode(elt) for elt in text_fr.split("\n")[: size] ],                    
+                [tok.encode(elt) for elt in text_en.split("\n")[:size]],
+                [tok.encode(elt) for elt in text_fr.split("\n")[:size]],
             )
 
             val_data = (
-                    [tok.encode(elt) for elt in text_en.split("\n")[size: ] ],
-                    [tok.encode(elt) for elt in text_fr.split("\n")[size: ] ],                    
-            )            
-            
+                [tok.encode(elt) for elt in text_en.split("\n")[size:]],
+                [tok.encode(elt) for elt in text_fr.split("\n")[size:]],
+            )
+
             model.fit_translation(
-                training_data=train_data,                
+                training_data=train_data,
                 block_size=block_size,
                 batch_size=batch_size,
                 eval_data=val_data,
@@ -132,6 +134,17 @@ def main():
         x = torch.zeros((1, 1), dtype=torch.long).to(device)
         res = model.generate(x, 500)
         print("Decoded output message: ", tok.decode(res[0].detach().cpu().tolist()))
+    elif args.task == "translation":
+        message_to_translate = text_en.split("\n")[
+            np.random.randint(0, len(text_en.split("\n")))
+        ]
+        print("English message: ", message_to_translate)
+        res = model.translate(
+            message=torch.tensor(tok.encode(message_to_translate), dtype=torch.long)
+        )
+        if res[0][-1] == 101:
+            res[0] = res[0][:-1]
+        print("French translation: ", tok.decode(res[0][1:].detach().cpu().tolist()))
     print("##### End of generation example #####")
 
 

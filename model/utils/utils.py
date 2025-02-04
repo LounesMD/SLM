@@ -73,7 +73,7 @@ class MulltiHeadAttention(nn.Module):
     def forward(self, x, enc_out=None):
         # enc_out is used in the case of an Encoder-Decoder architecture. Key-Value of the MHA of the Decoder.
         x = torch.cat(
-            [head(x, enc_out) for head in self.heads], dim=-1
+            [head(x=x, mask=False, enc_out=enc_out) for head in self.heads], dim=-1
         )  # Compute h times the attention
         x = self.fc_out(x)
         x = self.dropout(x)
@@ -93,7 +93,7 @@ class MaskedMulltiHeadAttention(MulltiHeadAttention):
 
     def forward(self, x):
         x = torch.cat(
-            [head(x, mask=True) for head in self.heads], dim=-1
+            [head(x=x, mask=True) for head in self.heads], dim=-1
         )  # Compute h times the attention
         x = self.fc_out(x)
         x = self.dropout(x)
@@ -141,7 +141,10 @@ def batch(data, block_size, batch_size, device):
     return x, y
 
 
-def pad_sequence(seq, max_length, padding_value=99):
+def pad_sequence(seq, max_length, padding_value=99, eos_token=101):
+    if seq[-1].item() != eos_token:
+        seq = torch.cat([seq, torch.tensor([eos_token], device="mps")])
+
     if len(seq) < max_length:
         pad_size = max_length - len(seq)
         return torch.cat([seq, torch.full((pad_size,), padding_value).to(device="mps")])

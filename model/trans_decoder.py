@@ -41,7 +41,12 @@ class TransformerDecoder(nn.Module):
 
     def forward(self, x):
         # Pre-norm
+        if isinstance(x, tuple):
+            x, enc_out = x
+        else:
+            x, enc_out = x, None
+
         x = x + self.masked_multi_head(self.norm1(x))
-        x = x + self.multi_head(self.norm2(x))
+        x = x + self.multi_head(self.norm2(x), enc_out=enc_out)
         x = x + self.ff_net(self.norm3(x))
         return x
