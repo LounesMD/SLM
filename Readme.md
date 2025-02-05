@@ -23,6 +23,7 @@ python main.py --training_iterations=5000 --text=shakespeare --train_model=False
 
 4. In coming:
    * Fine-tuning (LoRA + RLHF)
+   * (TODO) Provide good training parameters fo translation
 
 5. Done:
    * Tokenizer (byte and character level)

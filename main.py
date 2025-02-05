@@ -1,8 +1,8 @@
 import argparse
 
+import lorem
 import numpy as np
 import torch
-from lorem_text import lorem
 
 from model.trans_model import Transformer
 from model.utils.utils import batch
@@ -43,7 +43,6 @@ def main():
     args.train_model = mapping[str(args.train_model)]
     # Train on mps
     device = torch.device("mps")
-
     if args.task == "generation":
         if args.text == "lorem":
             text = lorem.paragraphs(10000)
@@ -108,12 +107,10 @@ def main():
                 [tok.encode(elt) for elt in text_en.split("\n")[:size]],
                 [tok.encode(elt) for elt in text_fr.split("\n")[:size]],
             )
-
             val_data = (
                 [tok.encode(elt) for elt in text_en.split("\n")[size:]],
                 [tok.encode(elt) for elt in text_fr.split("\n")[size:]],
             )
-
             model.fit_translation(
                 training_data=train_data,
                 block_size=block_size,
@@ -135,16 +132,21 @@ def main():
         res = model.generate(x, 500)
         print("Decoded output message: ", tok.decode(res[0].detach().cpu().tolist()))
     elif args.task == "translation":
-        message_to_translate = text_en.split("\n")[
-            np.random.randint(0, len(text_en.split("\n")))
-        ]
-        print("English message: ", message_to_translate)
-        res = model.translate(
-            message=torch.tensor(tok.encode(message_to_translate), dtype=torch.long)
-        )
-        if res[0][-1] == 101:
-            res[0] = res[0][:-1]
-        print("French translation: ", tok.decode(res[0][1:].detach().cpu().tolist()))
+        for _ in range(1):
+            idx = np.random.randint(0, len(text_en.split("\n")))
+            message_to_translate = text_en.split("\n")[idx]
+
+            print("(Input) English message: ", message_to_translate)
+            res = model.translate(
+                message=torch.tensor(tok.encode(message_to_translate), dtype=torch.long)
+            )
+            if res[-1] == 101:
+                res = res[:-1]
+            print("(Target) French translation: ", text_fr.split("\n")[idx])
+            print(
+                "(Predicted) French translation: ",
+                tok.decode(res[1:].detach().cpu().tolist()),
+            )
     print("##### End of generation example #####")
 
 

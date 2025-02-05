@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from model.trans_decoder import TransformerDecoder
 from model.trans_encoder import TransformerEncoder
-from model.utils.utils import batch, batch_translation, pos_embeddings
+from model.utils.utils import batch, batch_translation, pad_sequence, pos_embeddings
 
 
 class Transformer(nn.Module):
@@ -57,12 +57,10 @@ class Transformer(nn.Module):
         )
         self.proj_linear = nn.Sequential(
             nn.Linear(n_embed, vocab_size),
-            # nn.Softmax(dim=-1),
         )
-
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
 
-    def forward(self, x, y=None, full_architecture=False):
+    def forward(self, x, y=None, full_architecture=False, compute_loss=True):
         x = self.token_embedding(x)
         x += pos_embeddings(x.shape[1], x.shape[2], device=self.device).unsqueeze(0)
         # # Encoder forward
@@ -71,14 +69,18 @@ class Transformer(nn.Module):
             enc_output = self.encoder(x)
             # The input of the decoder is the target sequence but shifted by one token to the right
             if y is None:
-                y = torch.full(
+                dec_input = torch.full(
                     (x.size(0), 1), fill_value=100, dtype=torch.long, device=self.device
                 )
+            else:
+                dec_input = y
             sos_token = torch.full(
-                (y.size(0), 1), fill_value=100, dtype=torch.long, device=self.device
+                (dec_input.size(0), 1),
+                fill_value=100,
+                dtype=torch.long,
+                device=self.device,
             )
-            dec_input = torch.cat([sos_token, y[:, :-1]], dim=1)
-
+            dec_input = torch.cat([sos_token, dec_input[:, :-1]], dim=1)
             dec_input = self.token_embedding(dec_input)
             dec_input += pos_embeddings(
                 dec_input.shape[1], dec_input.shape[2], device=self.device
@@ -92,10 +94,15 @@ class Transformer(nn.Module):
         if y is None:
             loss = None
         else:
-            B, T, C = logits.size()
-            logits = logits.reshape(B * T, C)
-            y = y.reshape(B * T)
-            loss = F.cross_entropy(logits, y)
+            if compute_loss:
+                # TODO: Check the eos token for the loss
+                B, T, C = logits.size()
+                logits = logits.reshape(B * T, C)
+                y = y.reshape(B * T)
+
+                loss = F.cross_entropy(logits, y)
+            else:
+                loss = None
         return logits, loss
 
     @torch.no_grad()
@@ -104,39 +111,30 @@ class Transformer(nn.Module):
             logits, _ = self.forward(x[:, -self.block_size :], y=None)
             logits = logits[:, -1, :]
             probs = F.softmax(logits, dim=-1)
-            # We sample the next token
             next_token = torch.multinomial(probs, num_samples=1)
-            x = torch.cat(
-                [x, next_token], dim=-1
-            )  # We append the next token to the sequence
+            x = torch.cat([x, next_token], dim=-1)
         return x
 
     @torch.no_grad()
-    def translate(self, message, max_gen_length=50, sos_token=100, eos_token=101):
+    def translate(self, message, max_gen_length=16, sos_token=100, eos_token=101):
         """
         Translates a source message using the trained encoder-decoder model.
         """
         source = message.to(self.device).unsqueeze(0)
-        dec_input = torch.tensor([[sos_token]], dtype=torch.long, device=self.device)
-        # ---- Autoregressive generation loop ----
+        dec_input = torch.tensor([], dtype=torch.long, device=self.device)
         for _ in range(max_gen_length):
-            # Pass the source and current decoder input to the forward method.
-            # We expect our forward method to accept a dec_input parameter (for the decoder input)
-            # and use the encoder output to generate target tokens.
-            logits, _ = self.forward(source, y=None, full_architecture=True)
-            # logits shape is (1, T, vocab_size); take the logits for the last token.
-            # next_logits = logits[:, -1, :]  # shape: (1, vocab_size)
-            # Apply softmax to get probabilities (if not already applied in your proj_linear)
+            logits, _ = self.forward(
+                source,
+                y=dec_input.unsqueeze(0),
+                full_architecture=True,
+                compute_loss=False,
+            )
+            logits = logits[-1]
             probs = F.softmax(logits, dim=-1)
-            # Sample the next token from the probability distribution.
-            next_token = torch.multinomial(probs, num_samples=1)  # shape: (1, 1)
-            # Append the next token to the decoder input sequence.
-            dec_input = torch.cat([dec_input, next_token], dim=1)  # now shape: (1, T+1)
-
-            # Optionally, break if the end-of-sequence token is generated.
+            next_token = torch.multinomial(probs, num_samples=1)[-1]
+            dec_input = torch.cat([dec_input, next_token], dim=0)
             if next_token.item() == eos_token:
                 break
-
         return dec_input
 
     @torch.no_grad()
@@ -150,6 +148,7 @@ class Transformer(nn.Module):
                 batch_size=batch_size,
                 device=self.device,
             )
+            _, loss = self.forward(x, y, full_architecture=False)
         elif task == "translation":
             (x, y) = batch_translation(
                 data_x=[
@@ -164,7 +163,7 @@ class Transformer(nn.Module):
                 batch_size=batch_size,
                 device=self.device,
             )
-        _, loss = self.forward(x, y)
+            _, loss = self.forward(x, y, full_architecture=True)
         print("Step {} Evaluation Loss: {}".format(idx, loss.item()))
         self.train()
 
@@ -186,7 +185,6 @@ class Transformer(nn.Module):
 
     def fit_translation(self, training_data, block_size, batch_size, eval_data):
         for idx in range(self.training_iterations):
-            print(idx)
             (x, y) = batch_translation(
                 data_x=[
                     torch.tensor(elt, dtype=torch.long).to(self.device)
@@ -209,7 +207,7 @@ class Transformer(nn.Module):
                 self.get_loss(
                     eval_data, block_size, batch_size, idx, task="translation"
                 )
-                # print(tok.decode(self.generate(torch.zeros((1, 1), dtype=torch.long).to(self.device),50)[0].detach().cpu().tolist()))
+                print("Step {} training Loss: {}".format(idx, loss.item()))
 
     def save(self, path):
         torch.save(self.state_dict(), path)
